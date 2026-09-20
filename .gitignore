@@ -1,0 +1,18 @@
+# ===== AI 工作记忆（本机留存，不上传）=====
+.workbuddy/
+
+# ===== IDE =====
+.idea/
+*.iml
+.vscode/
+*.swp
+
+# ===== Java 编译产物 =====
+out/
+target/
+*.class
+
+# ===== 系统文件 =====
+Thumbs.db
+Desktop.ini
+.DS_Store
