@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Maven 工程描述文件：定义本项目的坐标、编译级别、依赖与插件 -->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <!-- POM 模型版本，固定写 4.0.0，Maven 2 之后都是这个值 -->
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- 组织/作者标识，与源码包名前缀保持一致 -->
+    <groupId>com.mark</groupId>
+    <!-- 项目（构件）名称，决定打包后的 jar 文件名 -->
+    <artifactId>mark-reader</artifactId>
+    <!-- 项目版本号，0.1.0 表示第一个可用版本 -->
+    <version>0.1.0</version>
+    <!-- 打包类型为 jar，即普通 Java 应用 -->
+    <packaging>jar</packaging>
+
+    <!-- 项目显示名称，仅用于报告展示 -->
+    <name>马克阅读</name>
+    <!-- 项目描述 -->
+    <description>纯 Java 命令行书摘管理工具：添加书籍、记录书摘、按书查询、阅读统计</description>
+
+    <properties>
+        <!-- 编译目标 Java 版本：用 release 而不是 source/target，可避免链接到更高版本 API -->
+        <maven.compiler.release>17</maven.compiler.release>
+        <!-- 源码与资源文件统一使用 UTF-8，防止中文书摘写入乱码 -->
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!-- 报告输出编码同样指定为 UTF-8 -->
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+        <!-- JUnit 5 版本号，抽成属性便于日后统一升级 -->
+        <junit.version>5.10.2</junit.version>
+    </properties>
+
+    <dependencies>
+        <!-- JUnit 5 测试框架：聚合包，包含 api / engine / params 等 -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${junit.version}</version>
+            <!-- test 作用域表示仅参与编译与运行测试，不会打进最终产物 -->
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- 编译插件：显式锁定版本，保证不同机器上编译行为一致 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+            </plugin>
+
+            <!-- 测试插件：负责在 mvn test 阶段发现并执行 JUnit 5 用例 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.2.5</version>
+            </plugin>
+
+            <!-- 打包插件：把启动类写入 jar 清单，使 java -jar 可直接运行 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.4.1</version>
+                <configuration>
+                    <archive>
+                        <manifest>
+                            <!-- 指定程序入口类，供 java -jar 使用 -->
+                            <mainClass>com.mark.reader.Main</mainClass>
+                        </manifest>
+                    </archive>
+                </configuration>
+            </plugin>
+
+            <!-- 执行插件：提供 mvn exec:java 直接启动程序的能力，方便开发期调试 -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.2.0</version>
+                <configuration>
+                    <!-- 指定 exec:java 启动的主类 -->
+                    <mainClass>com.mark.reader.Main</mainClass>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>
