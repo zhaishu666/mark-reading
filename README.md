@@ -60,26 +60,44 @@ java -jar target/mark-reader-0.1.0.jar
 0. 退出
 ```
 
-## 中文乱码怎么办
+## 中文编码处理
 
-程序默认**跟随控制台编码**读取输入，这在 Windows 命令行（代码页 936 / GBK）里手动敲中文是正确的。
+程序**不靠猜环境来决定编码**。Windows 中文环境下 JDK 会把 `stdin.encoding` 报成 GBK，
+但 IDE 运行窗口、Git Bash、管道重定向送来的往往是 UTF-8 字节，
+一旦按 GBK 去解，中文就会变成「涓変綋」这种东西并被写进数据文件。
 
-但以下场景会因为「控制台是 GBK、内容却是 UTF-8」而读错，需要显式指定编码：
+因此输入侧改为**看字节判定**，优先级如下：
 
-- 把 UTF-8 文本通过管道或重定向喂给程序，例如 `java -jar app.jar < input.txt`
-- 在编码设置异常的其他终端中运行
+| 顺序 | 条件 | 采用编码 |
+| --- | --- | --- |
+| 1 | 启动参数指定了 `-Dmark.reader.encoding=xxx` | 用户指定的编码，不做任何猜测 |
+| 2 | 整行字节是合法 UTF-8 | UTF-8（IDE 运行窗口、Git Bash、管道重定向都属于这种情况） |
+| 3 | 以上都不满足 | 控制台本地编码 `stdin.encoding`，取不到则用 JVM 默认 |
 
-两种解决办法：
+输出侧不做自动判定——自己的输出无法自我校验——优先用显式覆盖，否则跟随 `stdout.encoding`。
+
+**结论：正常情况下不需要任何额外配置。** 只有环境确实特殊时才需要显式指定：
 
 ```bash
-# 办法一：启动时强制输入输出统一使用 UTF-8（推荐）
-java -Dmark.reader.encoding=UTF-8 -jar target/mark-reader-0.1.0.jar
+# 例如在 GBK 控制台里重定向 GBK 文本
+java -Dmark.reader.encoding=GBK -jar target/mark-reader-0.1.0.jar
 
-# 办法二：在 cmd 里先把代码页切成 UTF-8，再启动程序
+# 或者先切换代码页为 UTF-8 再启动
 chcp 65001
 ```
 
 > 数据文件本身始终以 UTF-8 写入，与终端编码无关。用编辑器打开 `data/*.tsv` 时请选择 UTF-8。
+
+### 看到乱码时怎么判断
+
+「涓変綋」是「三体」的 UTF-8 字节被当作 GBK 解读的结果，这类形态可以直接认出问题所在：
+
+| 现象 | 含义 | 处理 |
+| --- | --- | --- |
+| 存进去的中文变成「涓変綋」这类怪字，但字形本身正常 | 输入解码用错了编码 | 升级到已修复版本；旧数据需要手工订正 |
+| 中文中间夹着 `�`（Unicode 替换字符） | 该行字节被错误编码截断，通常伴随上一种情况 | 同上 |
+| 打开 `data/*.tsv` 看到乱码，但程序里显示正常 | 编辑器没用 UTF-8 打开 | 把编辑器编码切成 UTF-8 |
+
 
 ## 目录结构
 
@@ -88,7 +106,8 @@ src/main/java/com/mark/reader/
 ├─ Main.java                    程序入口，唯一的依赖装配点
 ├─ cli/                         交互层：菜单、输入输出
 │  ├─ ConsoleIO.java            输入输出接口（便于测试替换）
-│  ├─ ConsoleIOImpl.java        控制台实现，含编码探测
+│  ├─ ConsoleIOImpl.java        控制台实现，含输入编码自动判定
+│  ├─ Utf8.java                 UTF-8 字节序列校验（编码判定的依据）
 │  └─ CommandLineApp.java       菜单主循环与功能分发
 ├─ service/                     业务层：校验与业务规则
 │  ├─ BookService.java
