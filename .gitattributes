@@ -1,0 +1,30 @@
+# ===== 行尾统一约定 =====
+# 所有文本文件由 git 自动识别，仓库内统一以 LF 存储，
+# 避免 Windows(LF->CRLF) 与 Linux/Mac(LF) 协作时产生无意义的行尾差异。
+
+# 默认：自动识别文本文件，仓库内统一 LF
+* text=auto eol=lf
+
+# ===== 强制按文本处理的文件类型 =====
+*.java   text
+*.md     text
+*.tsv    text
+*.txt    text
+*.xml    text
+*.yml    text
+*.yaml   text
+*.properties text
+*.sh     text eol=lf
+
+# ===== 二进制文件（禁止任何行尾转换）=====
+*.jar    binary
+*.class  binary
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.gif    binary
+*.ico    binary
+*.pdf    binary
+
+# ===== git 语言统计：脚本目录不参与语言占比 =====
+scripts/* linguist-vendored
