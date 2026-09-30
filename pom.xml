@@ -30,6 +30,8 @@
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <!-- JUnit 5 版本号，抽成属性便于日后统一升级 -->
         <junit.version>5.10.2</junit.version>
+        <!-- JaCoCo 版本号，抽成属性便于统一升级 -->
+        <jacoco.version>0.8.12</jacoco.version>
     </properties>
 
     <dependencies>
@@ -82,6 +84,61 @@
                 <configuration>
                     <!-- 指定 exec:java 启动的主类 -->
                     <mainClass>com.mark.reader.Main</mainClass>
+                </configuration>
+            </plugin>
+
+            <!--
+                代码覆盖率插件 JaCoCo：
+                在测试阶段挂载 Java Agent 采集行/分支覆盖数据，并生成 HTML 报告。
+
+                注意：覆盖率数据文件必须放在纯 ASCII 路径（本机 E:/jacoco-data）。
+                JaCoCo 在 native 层解析 -javaagent 的 destfile 参数时不做编码转换，
+                若路径含中文（如本机用户名「翟曙」），JVM 会直接崩溃：
+                "processing of -javaagent failed, processJavaStart failed"。
+            -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${jacoco.version}</version>
+                <executions>
+                    <!-- 执行 1：测试开始前，准备 Agent 采集运行时覆盖数据 -->
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <!-- prepare-agent 目标会把 agent 参数注入 surefire，使其随测试启动 -->
+                            <goal>prepare-agent</goal>
+                        </goals>
+                        <configuration>
+                            <!--
+                                destFile 是 prepare-agent 的参数名（与 report 的 dataFile 不同）。
+                                必须指向纯 ASCII 路径，否则 -javaagent 的 destfile 参数会导致 JVM 崩溃。
+                            -->
+                            <destFile>E:/jacoco-data/jacoco.exec</destFile>
+                        </configuration>
+                    </execution>
+
+                    <!-- 执行 2：测试结束后，把采集到的 .exec 二进制数据渲染成报告 -->
+                    <execution>
+                        <id>report</id>
+                        <!-- 绑定到 test 阶段，保证 mvn test 后立刻能看报告 -->
+                        <phase>test</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                        <configuration>
+                            <!-- dataFile 是 report 目标的参数名，需与上面的 destFile 保持一致 -->
+                            <dataFile>E:/jacoco-data/jacoco.exec</dataFile>
+                        </configuration>
+                    </execution>
+                </executions>
+                <configuration>
+                    <!-- 报告输出目录，HTML 入口为 index.html -->
+                    <outputDirectory>${project.reporting.outputDirectory}/jacoco</outputDirectory>
+                    <!-- 排除不参与统计的类 -->
+                    <excludes>
+                        <!-- 程序入口类只有一句组装调用，无逻辑可覆盖 -->
+                        <exclude>com/mark/reader/Main.class</exclude>
+                    </excludes>
                 </configuration>
             </plugin>
         </plugins>
