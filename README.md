@@ -30,8 +30,8 @@
 | 组件 | 版本 | 说明 |
 | --- | --- | --- |
 | JDK | 17 及以上 | 本机已验证 JDK 25；源码按 Java 17 语法编写 |
-| Maven | 3.9 及以上 | 本机安装于 `C:\Users\翟曙\tools\apache-maven-3.9.16`，已加入用户 PATH |
-| JAVA_HOME | 指向 JDK 根目录 | 本机为 `E:\JDK26`，`mvn` 依赖它定位 JDK |
+| Maven | 3.9 及以上 | 解压到任意目录（如 `<你的 Maven 目录>`），并把其 `bin` 加入 PATH |
+| JAVA_HOME | 指向 JDK 根目录 | 如 `<你的 JDK 目录>`，`mvn` 依赖它定位 JDK |
 
 ## 构建与运行
 
