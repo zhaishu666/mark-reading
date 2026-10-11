@@ -179,3 +179,27 @@ id	bookId	content	page	tags	createdAt
 ## 迭代记录
 
 见 commit 历史。每个提交对应一次可独立回滚的改动，且提交时测试全部通过。
+
+## TroubleShooting
+
+一、**中文乱码**
+
+现象: 向程序中添加[三体]却显示成[涓変綋]
+
+实测: 查看JVM的编码相关属性发现: stdin.encoding = ms936
+
+原因: stdin.encoding 描述的是"控制台声称的编码",而不是实际送来的字节;程序将UTF-8按照GBK解读
+
+解决方案: 避免直接写死UTF-8或GBK,因为合法UTF-8的位模式极其严格,所以可以采用"看字节"的方式判断;按RFC 3629校验字节序列合法性.
+
+二、**中文用户名**
+
+现象: 尝试Maven编译时,报`Could not create local repository`;
+- Junit单元测试报错---`Failed to parse agent arguments`，路径显示成 `µÔÊï`;
+- 尝试使用JaCoCo测试覆盖率---报`-javaagent` FATAL ERROR
+
+实测: 普通Java文件I/O及JVM的`-D`参数传中文完全正常
+
+原因: 中文路径本身不是问题;出现问题的时native层/第三方二进制组件的参数解析;Junit覆盖率出错是JetBrains读取参数文件时解码错的bug
+
+解决方案: 将maven路径移动到非中文目录下
