@@ -98,7 +98,6 @@ chcp 65001
 | 中文中间夹着 `�`（Unicode 替换字符） | 该行字节被错误编码截断，通常伴随上一种情况 | 同上 |
 | 打开 `data/*.tsv` 看到乱码，但程序里显示正常 | 编辑器没用 UTF-8 打开 | 把编辑器编码切成 UTF-8 |
 
-
 ## 目录结构
 
 ```
@@ -180,26 +179,21 @@ id	bookId	content	page	tags	createdAt
 
 见 commit 历史。每个提交对应一次可独立回滚的改动，且提交时测试全部通过。
 
-## TroubleShooting
+## Troubleshooting
 
-一、**中文乱码**
+### 一、中文乱码
 
-现象: 向程序中添加[三体]却显示成[涓変綋]
+- **现象**：向程序中添加「三体」却显示成「涓変綋」。
+- **实测**：查看 JVM 的编码相关属性，发现 `stdin.encoding = GBK`。
+- **原因**：`stdin.encoding` 描述的是「控制台声称的编码」，而不是实际送来的字节；程序把 UTF-8 字节按 GBK 解读，于是输出乱码。
+- **解决方案**：不写死 UTF-8 或 GBK，而是改为「看字节」判断——按 RFC 3629 校验字节序列是否为合法 UTF-8，合法则按 UTF-8 解码，否则回退到控制台本地编码。
 
-实测: 查看JVM的编码相关属性发现: stdin.encoding = ms936
+### 二、中文用户名
 
-原因: stdin.encoding 描述的是"控制台声称的编码",而不是实际送来的字节;程序将UTF-8按照GBK解读
-
-解决方案: 避免直接写死UTF-8或GBK,因为合法UTF-8的位模式极其严格,所以可以采用"看字节"的方式判断;按RFC 3629校验字节序列合法性.
-
-二、**中文用户名**
-
-现象: 尝试Maven编译时,报`Could not create local repository`;
-- Junit单元测试报错---`Failed to parse agent arguments`，路径显示成 `µÔÊï`;
-- 尝试使用JaCoCo测试覆盖率---报`-javaagent` FATAL ERROR
-
-实测: 普通Java文件I/O及JVM的`-D`参数传中文完全正常
-
-原因: 中文路径本身不是问题;出现问题的时native层/第三方二进制组件的参数解析;Junit覆盖率出错是JetBrains读取参数文件时解码错的bug
-
-解决方案: 将maven路径移动到非中文目录下
+- **现象**：
+  - 在 IDEA 中执行 Maven 编译，报 `Could not create local repository`；
+  - IDEA 覆盖率报 `Failed to parse agent arguments`，路径显示成 `µÔÊï`；
+  - 接入 JaCoCo 后，`-javaagent` 挂载阶段报 FATAL ERROR。
+- **实测**：普通 Java 文件 I/O 以及 JVM 的 `-D` 参数传中文都**完全正常**。
+- **原因**：中文路径本身不是问题——普通文件读写和 `-D` 参数都能正确处理中文；真正出问题的是 **native 层与第三方二进制组件的参数解析**。IDEA 覆盖率那次则是 JetBrains 读取参数文件时解码错误导致的 bug，属于工具自身的缺陷。
+- **解决方案**：把对路径敏感的产物挪到纯 ASCII 路径下——Maven 本地仓库改到 `E:\maven-repo`（由 `~/.m2/settings.xml` 的 `<localRepository>` 指定），JaCoCo 覆盖率数据文件改到 `E:/jacoco-data`（由插件的 `<destFile>` 指定）。项目路径本身仍在中文目录下，未做迁移。
