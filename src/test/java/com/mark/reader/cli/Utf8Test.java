@@ -34,7 +34,7 @@ class Utf8Test {
      * @param bytes    待校验的字节序列，null 表示输入为 null
      * @param expected 期望的判定结果，true 表示应判为合法 UTF-8
      */
-    @ParameterizedTest(name = "[{index}] {0}")
+    @ParameterizedTest(name = "{0}")
     @MethodSource("utf8Case")
     void isValidShouldMatchExpectation(String desc, byte[] bytes, boolean expected) {
         // 实际结果必须等于期望结果；第三个参数是断言失败时输出的提示信息
