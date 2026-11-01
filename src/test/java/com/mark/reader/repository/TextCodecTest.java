@@ -4,11 +4,15 @@ import com.mark.reader.exception.ValidationException;
 import com.mark.reader.repository.file.TextCodec;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -19,6 +23,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <p>
  * 覆盖重点：转义与反转义必须互为逆运算（往返不丢信息）、
  * 特殊分支（null、末尾反斜杠、非法转义序列）必须有明确行为。
+ * <p>
+ * escape 的字符映射采用参数化写法：五种特殊字符与两类普通文本本质上是
+ * 同一段断言逻辑，只是输入与期望值不同，因此用一张数据表统一表达。
  */
 @DisplayName("TextCodec 转义编解码")
 class TextCodecTest {
@@ -34,33 +41,50 @@ class TextCodecTest {
     }
 
     /**
-     * 校验 escape 对五种特殊字符的映射规则是否与设计文档一致。
+     * 校验 escape 对各类字符的映射结果是否符合约定。
+     * <p>
+     * 特殊字符的转义与普通文本的「原样保留」共用同一段断言逻辑，
+     * 差别只体现在数据行的输入与期望值上。
+     *
+     * @param desc     用例描述，断言失败时作为提示信息输出
+     * @param raw      待转义的原始字符串
+     * @param expected 期望的转义结果
      */
-    @Test
-    @DisplayName("escape：制表符/换行/回车/反斜杠/竖线分别转义")
-    void escapeMapsSpecialCharacters() {
-        // 制表符 -> \t
-        assertEquals("\\t", TextCodec.escape("\t"));
-        // 换行 -> \n
-        assertEquals("\\n", TextCodec.escape("\n"));
-        // 回车 -> \r
-        assertEquals("\\r", TextCodec.escape("\r"));
-        // 单个反斜杠 -> 两个反斜杠
-        assertEquals("\\\\", TextCodec.escape("\\"));
-        // 竖线 -> \p，以保护标签分隔符
-        assertEquals("\\p", TextCodec.escape("|"));
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("escapeCases")
+    void escapeShouldProduceExpected(String desc, String raw, String expected) {
+        // 实际转义结果必须等于期望值；desc 用于定位是哪一组数据出错
+        assertEquals(expected, TextCodec.escape(raw), desc);
     }
 
     /**
-     * 校验普通中英文内容经过 escape 后保持不变，避免过度转义。
+     * 参数化测试的数据源，每行是一组「原始文本 → 期望的转义结果」。
+     * <p>
+     * 前五行逐一覆盖五种特殊字符的映射规则，后两行验证普通文本不会被过度转义。
+     * 五种映射是独立的 switch 分支，必须逐条精确断言，不能用往返测试替代
+     * ——往返只能证明前后自洽，证明不了映射结果本身就是对的。
+     * <p>
+     * 注意：本方法必须是 static，JUnit 在创建测试实例之前就要取数据。
+     *
+     * @return 数据行流，每行依次为：用例描述、原始文本、期望结果
      */
-    @Test
-    @DisplayName("escape：普通文本原样保留")
-    void escapeKeepsPlainTextUntouched() {
-        // 一句不含特殊字符的中文不应被改动
-        assertEquals("人是为活着本身而活着", TextCodec.escape("人是为活着本身而活着"));
-        // 纯英文字母与数字同样保持原样
-        assertEquals("book-2026", TextCodec.escape("book-2026"));
+    static Stream<Arguments> escapeCases() {
+        return Stream.of(
+                // 制表符是字段分隔符，必须转义，否则会撑破一行
+                Arguments.of("制表符转义", "\t", "\\t"),
+                // 换行是行分隔符，转义为 \n
+                Arguments.of("换行转义", "\n", "\\n"),
+                // 回车单独出现时同样会破坏行结构，转义为 \r
+                Arguments.of("回车转义", "\r", "\\r"),
+                // 反斜杠是引导符，自身必须最先转义，避免与后续转义序列冲突
+                Arguments.of("反斜杠转义", "\\", "\\\\"),
+                // 竖线是标签分隔符，转义为 \p 以保护标签内部的竖线
+                Arguments.of("竖线转义", "|", "\\p"),
+                // 普通中文不应被改动，验证没有过度转义
+                Arguments.of("中文原样保留", "人是为活着本身而活着", "人是为活着本身而活着"),
+                // 普通英文、连字符（不含特殊字符）同样原样保留
+                Arguments.of("英文原样保留", "book-2026", "book-2026")
+        );
     }
 
     /**
