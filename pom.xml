@@ -34,6 +34,18 @@
         <jacoco.version>0.8.12</jacoco.version>
     </properties>
 
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-dependencies</artifactId>
+                <version>4.0.8</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <dependencies>
         <!-- JUnit 5 测试框架：聚合包，包含 api / engine / params 等 -->
         <dependency>
@@ -43,6 +55,12 @@
             <!-- test 作用域表示仅参与编译与运行测试，不会打进最终产物 -->
             <scope>test</scope>
         </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter</artifactId>
+        </dependency>
+
     </dependencies>
 
     <build>
