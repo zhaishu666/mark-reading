@@ -50,6 +50,8 @@ public class AppConfig {
      * @param dataDir 数据目录，由 Spring 从配置注入
      * @return 基于文件的书摘仓储
      */
+
+    //@Value注解写了两次完全相同的,接入Spring AI时优化
     @Bean
     public ExcerptRepository excerptRepository(@Value("${mark.reader.data-dir:data}") String dataDir){
         return new FileExcerptRepository(Path.of(dataDir));
