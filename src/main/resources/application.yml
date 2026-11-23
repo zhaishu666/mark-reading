@@ -1,0 +1,16 @@
+# 几个需要注意的点:
+# IDEA 默认把 Tab 设成 4 空格，但如果哪天从别处复制配置进来带了真 Tab，
+# Boot 启动会报 ScannerException: found character '\t' that cannot start any token。看到这个错，先找 Tab。
+#
+#
+
+
+# 用于BookRepository和ExcerptRepository的配置时扫描data包的保存的书本信息
+mark:
+  reader:
+    data-dir: data
+
+
+# spring:
+#   profiles:
+#     active: prod
