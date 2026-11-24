@@ -11,6 +11,10 @@ mark:
     data-dir: data
 
 
-# spring:
+spring:
+  ai:
+    deepseek:
+      api-key: ${DEEPSEEK_API_KEY:sk-placeholder}
+
 #   profiles:
 #     active: prod
