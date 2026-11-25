@@ -47,8 +47,11 @@ java -jar target/mark-reader-0.1.0.jar
 
 ## 技术栈
 
-- 当前（v0.1.0）：Java 17 + Maven + JUnit 5 + TSV 文件持久化，运行时零第三方依赖
-- 下一步（v0.2）：接入 Spring AI 做书摘智能摘要，含超时降级与本地缓存；配套评测集验证效果
+- v0.1.0：Java 17 + Maven + JUnit 5 + TSV 文件持久化，**运行时零第三方依赖**
+- v0.2（进行中）：在上面加了 Spring Boot 4.0.8 与 Spring AI 2.0.3（DeepSeek）
+  - 已接入：容器装配（业务层零改动）、超时降级、本地兜底、CLI 摘要入口
+  - 未完成：本地缓存、评测集
+- 依赖边界没有变：`model` / `repository` / `service` / `cli` 里**没有一行 Spring 代码**，装配集中在 `config/AppConfig`
 
 ## 功能
 
@@ -58,6 +61,11 @@ java -jar target/mark-reader-0.1.0.jar
 - [x] 记录书摘（正文 / 页码 / 标签，同书内容自动去重）
 - [x] 按书查询书摘（支持书名关键字筛选，展示页码、标签、摘录时间）
 - [x] 阅读统计（全局汇总 + 各书明细排行）
+
+已实现（v0.2）：
+
+- [x] 书摘智能摘要：把一本书的全部书摘交给模型，生成 3–5 句归纳（CLI 菜单第 5 项）
+- [x] 超时降级：主调用限时 3 秒，超时或服务不可用自动回退到本地摘要，用户侧不被阻塞
 
 规划中：
 
@@ -117,7 +125,9 @@ chcp 65001
 
 ```
 src/main/java/com/mark/reader/
-├─ Main.java                    程序入口，唯一的依赖装配点
+├─ Main.java                    程序入口：启动容器、取出 CommandLineApp 并运行
+├─ config/                      装配层（全项目唯一与框架耦合的地方）
+│  └─ AppConfig.java            @EnableAutoConfiguration + 全部 @Bean
 ├─ cli/                         交互层：菜单、输入输出
 │  ├─ ConsoleIO.java            输入输出接口（便于测试替换）
 │  ├─ ConsoleIOImpl.java        控制台实现，含输入编码自动判定
@@ -126,7 +136,13 @@ src/main/java/com/mark/reader/
 ├─ service/                     业务层：校验与业务规则
 │  ├─ BookService.java
 │  ├─ ExcerptService.java
-│  └─ StatisticsService.java
+│  ├─ StatisticsService.java
+│  └─ SummaryService.java       取书摘 → 拼文本 → 交给摘要生成器
+├─ ai/                          摘要生成（端口 + 两种实现，不含业务规则）
+│  ├─ SummaryGenerator.java     接口：String summarize(String)
+│  ├─ AiSummaryGenerator.java   模型适配器，失败时抛 SummaryUnavailableException
+│  ├─ LocalSummaryGenerator.java 本地兜底：截断原文，永不抛异常
+│  └─ FallbackSummaryGenerator.java 装饰器：限时调 primary，失败/超时降级
 ├─ repository/                  存储层
 │  ├─ BookRepository.java       接口
 │  ├─ ExcerptRepository.java    接口
@@ -139,13 +155,14 @@ src/main/java/com/mark/reader/
 │  └─ ReadingStats.java  OverallStats.java
 └─ exception/                   业务异常
    ├─ ValidationException.java
-   └─ BookNotFoundException.java
+   ├─ BookNotFoundException.java
+   └─ SummaryUnavailableException.java  标记「模型不可用，可以降级」
 ```
 
 ## 架构约定
 
 - **依赖方向单向**：`cli` → `service` → `repository` → 文件。上层只依赖下层的接口，不反向依赖。
-- **存储可替换**：`repository` 先定义接口，`file` 包提供文件实现。将来迁移 MySQL 时新增一个实现类，只需修改 `Main` 里的两行装配代码，业务代码零改动。
+- **存储可替换**：`repository` 先定义接口，`file` 包提供文件实现。将来迁移 MySQL 时新增一个实现类，只需改 `config/AppConfig` 里的一个 `@Bean`，业务代码零改动。
 - **业务逻辑与界面解耦**：菜单类只做「画界面、读输入、调服务、打结果」，任何校验规则都写在服务层，因此图形界面可以随时替换。
 - **时间可注入**：服务层通过构造参数接收 `java.time.Clock`，测试中使用固定时钟，断言不依赖真实系统时间。
 
@@ -169,12 +186,57 @@ flowchart TD
 v0.1.0 是在系统学习 Spring 之前完成的，因此选择了零第三方依赖的实现。事后看，这个约束带来三个好处：
 
 1. **依赖关系是显式的**：没有容器，每个类的依赖都写在构造器上，谁依赖谁一眼可见。用 `@Autowired` 时反而容易「注入了一堆，说不清用了哪些」。
-2. **存储边界先立住**：`repository` 先定接口再实现，现在换存储只需新增一个实现类、改 `Main` 里两行装配代码。
+2. **存储边界先立住**：`repository` 先定接口再实现，现在换存储只需新增一个实现类、改 `AppConfig` 里的一个 `@Bean`。
 3. **业务逻辑没有被框架绑架**：`service` 层不依赖任何 Web 或 ORM 类型，将来接 Controller 只是「多一层调用」。
 
 代价同样明确：没有 Web 界面、没有并发处理、单机单用户。这些是 v0.2 及以后要补的，不是设计缺陷。
 
 **为什么现在不做 Web 版**：核心域（书籍 / 书摘 / 统计）的规则还在演进，过早包一层 Controller 会让每次改业务都跟着改接口。等规则稳定、且 v0.2 的 AI 摘要模块跑通后，再整体接入 Web 层——那时是一次完整改造，而不是两次半成品。
+
+## 已知边界（AI 摘要，v0.2 进行中）
+
+这一节记录**主动不做的**和**已知做不好的**，全部来自实际运行，不是设想。
+
+### 1. HTTP 层没有超时
+
+Spring AI 2.0.3 的 DeepSeek 配置元数据里没有任何 timeout 属性，客户端用的是默认值。
+后果：网络异常时请求线程会挂到 TCP 自身超时（数十秒），期间**无法被中断**。
+缓解：调用方 `FallbackSummaryGenerator` 有 3 秒超时，保证**用户不等**，但**不保证线程结束**。
+真正的中断要在 HTTP 客户端上配 connect / read timeout，尚未实现。
+
+### 2. 客户端线程不由容器关闭
+
+Spring AI 内部会创建 Reactor Netty 客户端，`DeepSeekApi` 没有实现 `AutoCloseable`，容器关闭时不会释放它。
+用 `mvn exec:java` 启动时，`main` 返回后 Maven 还要等这些线程退出，表现为「程序已经显示退出，却卡十几秒」。
+
+开发期规避（参数已核实存在）：
+
+```bash
+mvn compile exec:java -Dexec.cleanupDaemonThreads=false
+```
+
+打包运行不受影响。根本修法是给 `FallbackSummaryGenerator` 加 `shutdown()` 并在 `@Bean(destroyMethod=...)` 里挂上，或改用 fat jar 启动。
+
+### 3. 降级是静默的（待补）
+
+降级发生时只有返回值带 `【本地摘要】` 前缀，**日志里没有任何记录**。
+线上这等于「出了问题没人知道」。计划补一条 WARN，带上降级原因与异常类型。
+
+### 4. 没有缓存
+
+同一本书连续请求摘要会重复调用模型（重复计费）。计划按「书摘内容指纹」缓存，并在书摘增删时失效。
+
+### 5. 没有评测集
+
+摘要质量目前只能人工看一眼，没有可复现的评分。计划准备 10–20 条书摘样本 + 人工参考答案，固定 prompt 跑一遍做对比。
+
+### 6. 只支持单轮、非流式
+
+一次调用一次响应，没有多轮上下文、没有流式输出。CLI 场景够用，接 Web 层时再评估。
+
+### 7. 摘要输入受模型上下文长度限制
+
+当前把一本书的**全部**书摘一次性拼进 prompt，没有截断策略。书摘很多的书会超长。计划按 token 预算分块摘要再合并。
 
 ## 数据文件
 
@@ -220,6 +282,13 @@ id	bookId	content	page	tags	createdAt
 ## 迭代记录
 
 见 commit 历史。每个提交对应一次可独立回滚的改动，且提交时测试全部通过。
+
+v0.2 的推进顺序（每一步都以「测试全绿 + 可手动验证」为完成标准）：
+
+1. 引入 Spring Boot 容器接管装配 —— 验收：`service` / `repository` 的 `git diff` 为空，132 个测试仍 0.1 秒级
+2. 摘要降级骨架（`SummaryGenerator` + 本地实现 + 装饰器）—— 验收：5 条纯 JUnit 用例，改坏实现能精确变红
+3. ChatModel 适配器 + `SummaryService` 拼装 —— 验收：错 key 走降级、真 key 出摘要
+4. CLI 入口（菜单第 5 项）—— 验收：能从菜单触发并看到结果
 
 ## Troubleshooting
 

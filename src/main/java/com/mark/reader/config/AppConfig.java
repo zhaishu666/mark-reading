@@ -1,5 +1,9 @@
 package com.mark.reader.config;
 
+import com.mark.reader.ai.AiSummaryGenerator;
+import com.mark.reader.ai.FallbackSummaryGenerator;
+import com.mark.reader.ai.LocalSummaryGenerator;
+import com.mark.reader.ai.SummaryGenerator;
 import com.mark.reader.cli.CommandLineApp;
 import com.mark.reader.cli.ConsoleIO;
 import com.mark.reader.cli.ConsoleIOImpl;
@@ -10,12 +14,16 @@ import com.mark.reader.repository.file.FileExcerptRepository;
 import com.mark.reader.service.BookService;
 import com.mark.reader.service.ExcerptService;
 import com.mark.reader.service.StatisticsService;
+import com.mark.reader.service.SummaryService;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import java.nio.file.Path;
 import java.time.Clock;
+import java.time.Duration;
 
 /**
  * Spring 装配配置：全项目唯一与框架耦合的地方。
@@ -26,8 +34,15 @@ import java.time.Clock;
  * <p>
  * {@code proxyBeanMethods = false} 表示本类的 @Bean 方法之间不会互相调用，
  * 关闭 CGLIB 代理可以省掉一层子类化，让容器启动更快。
+ * <p>
+ * {@link EnableAutoConfiguration} 是「自动配置」的总开关：只有它存在，Spring Boot 才会去读
+ * 各个 jar 里 {@code META-INF/spring/....imports} 列出的配置类。少了这个注解，容器照样能启动，
+ * 但所有 starter 提供的 Bean（例如 {@code ChatModel}）都不会被创建 —— 而且启动阶段不报错，
+ * 要等到有人注入它时才失败。本项目用它替代 {@code @SpringBootApplication}，
+ * 是为了保持「装配只有这一个类」的结构。
  */
 @Configuration(proxyBeanMethods = false)
+@EnableAutoConfiguration
 public class AppConfig {
 
     /**
@@ -134,7 +149,27 @@ public class AppConfig {
      * @return 命令行应用实例
      */
     @Bean
-    public CommandLineApp commandLineApp(ConsoleIO consoleIO, BookService bookService, ExcerptService excerptService, StatisticsService statisticsService){
-        return new CommandLineApp(consoleIO, bookService, excerptService, statisticsService);
+    public CommandLineApp commandLineApp(ConsoleIO consoleIO,
+                                         BookService bookService,
+                                         ExcerptService excerptService,
+                                         StatisticsService statisticsService,
+                                         SummaryService summaryService){
+        return new CommandLineApp(consoleIO, bookService, excerptService, statisticsService, summaryService);
+    }
+
+    @Bean
+    public SummaryGenerator summaryGenerator(ChatModel chatModel){
+        return new FallbackSummaryGenerator(
+                new AiSummaryGenerator(chatModel),
+                new LocalSummaryGenerator(),
+                Duration.ofSeconds(3)  //先写死为3秒,@Value注解注入 Duration 依赖 Boot 的类型转换器还未进行验证,暂不使用
+        );
+    }
+
+    @Bean
+    public SummaryService summaryService(BookService bookService,
+                                         ExcerptService excerptService,
+                                         SummaryGenerator summaryGenerator) {
+        return new SummaryService(bookService, excerptService, summaryGenerator);
     }
 }

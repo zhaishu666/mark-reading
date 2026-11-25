@@ -15,6 +15,12 @@ spring:
   ai:
     deepseek:
       api-key: ${DEEPSEEK_API_KEY:sk-placeholder}
+    retry:
+      max-attempts: 2
+      backoff:
+        initial-interval: 1s
+        multiplier: 2
 
 #   profiles:
 #     active: prod
+

@@ -8,6 +8,6 @@ public class SummaryUnavailableException extends RuntimeException {
         super(message);
     }
     public SummaryUnavailableException(String message, Throwable cause){
-        super(message + ": " + cause);
+        super(message, cause);
     }
 }

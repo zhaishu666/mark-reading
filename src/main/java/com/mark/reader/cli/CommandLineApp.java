@@ -1,6 +1,7 @@
 package com.mark.reader.cli;
 
 import com.mark.reader.exception.BookNotFoundException;
+import com.mark.reader.exception.SummaryUnavailableException;
 import com.mark.reader.exception.ValidationException;
 import com.mark.reader.model.Book;
 import com.mark.reader.model.Excerpt;
@@ -9,6 +10,9 @@ import com.mark.reader.model.ReadingStats;
 import com.mark.reader.service.BookService;
 import com.mark.reader.service.ExcerptService;
 import com.mark.reader.service.StatisticsService;
+import com.mark.reader.service.SummaryService;
+import org.springframework.ai.retry.NonTransientAiException;
+import org.springframework.ai.retry.TransientAiException;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -30,7 +34,7 @@ public class CommandLineApp {
     private static final int MENU_MIN = 0;
 
     /** 菜单里允许输入的最大选项值 */
-    private static final int MENU_MAX = 4;
+    private static final int MENU_MAX = 5;
 
     /** 页数未知时允许录入的页码上限，防止用户手滑敲出天文数字 */
     private static final int MAX_PAGE_INPUT = 100_000;
@@ -51,6 +55,9 @@ public class CommandLineApp {
     /** 统计业务服务 */
     private final StatisticsService statisticsService;
 
+    /** 字段摘要服务*/
+    private final SummaryService summaryService;
+
     /**
      * 构造函数，注入界面所需的全部依赖。
      *
@@ -62,7 +69,8 @@ public class CommandLineApp {
     public CommandLineApp(ConsoleIO io,
                           BookService bookService,
                           ExcerptService excerptService,
-                          StatisticsService statisticsService) {
+                          StatisticsService statisticsService,
+                          SummaryService summaryService) {
         // 保存输入输出通道
         this.io = io;
         // 保存书籍服务
@@ -71,6 +79,8 @@ public class CommandLineApp {
         this.excerptService = excerptService;
         // 保存统计服务
         this.statisticsService = statisticsService;
+        //
+        this.summaryService = summaryService;
     }
 
     /**
@@ -106,13 +116,18 @@ public class CommandLineApp {
                     case 3 -> handleQueryExcerpts();
                     // 4：阅读统计
                     case 4 -> handleShowStatistics();
+
+                    case 5 -> handleSummarize();
                     // 其余取值已被 readInt 的范围校验挡住，这里只是防御性分支
                     default -> io.printLine("暂不支持该操作。");
                 }
             } catch (ValidationException | BookNotFoundException e) {
                 // 业务校验失败属于用户可修正的问题，打印原因即可，不中断程序
                 io.printLine("操作失败：" + e.getMessage());
-            }
+            }catch (SummaryUnavailableException e) {
+                // 防御性分支：正常装配下降级已兜住，走到这里说明兜底链本身出了问题
+                io.printLine("摘要服务不可用，且本地兜底也失败：" + e.getMessage());
+            };
         }
     }
 
@@ -126,6 +141,7 @@ public class CommandLineApp {
         io.printLine("2. 记录书摘");
         io.printLine("3. 按书查询书摘");
         io.printLine("4. 阅读统计");
+        io.printLine("5. AI 摘要");
         io.printLine("0. 退出");
     }
 
@@ -413,5 +429,23 @@ public class CommandLineApp {
         }
         // 按固定格式输出
         return time.format(TIME_FORMATTER);
+    }
+
+    private void handleSummarize(){
+        List<Book> books = bookService.listAll();
+        if(books.isEmpty()){
+            io.printLine("书库还是空的，请先添加书籍。");
+            return;
+        }
+        printBookList(books);
+        Integer index = io.readInt("请输入书籍序号（0 返回）：", 0, books.size());
+        // 输入流结束（null）和用户选 0 都要返回，缺了 null 判断会在拆箱时 NPE
+        if(index == null || index == 0) return;
+
+        String summarized = summaryService.summarizeBook(books.get(index - 1).getId());
+        // 所有输出必须走 io，直接 System.out 会绕过 ConsoleIO，测试抓不到
+        io.printLine("");
+        io.printLine("【摘要】《" + books.get(index - 1).getTitle() + "》");
+        io.printLine(summarized);
     }
 }

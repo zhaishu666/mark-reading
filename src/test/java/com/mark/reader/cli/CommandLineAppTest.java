@@ -9,6 +9,7 @@ import com.mark.reader.repository.file.FileExcerptRepository;
 import com.mark.reader.service.BookService;
 import com.mark.reader.service.ExcerptService;
 import com.mark.reader.service.StatisticsService;
+import com.mark.reader.service.SummaryService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -66,11 +67,13 @@ class CommandLineAppTest {
      * @return 命令行界面实例
      */
     private CommandLineApp newApp(FakeConsoleIO io) {
-        // 三个服务共享上面建立的仓储与固定时钟
-        return new CommandLineApp(io,
-                new BookService(bookRepository, FIXED_CLOCK),
-                new ExcerptService(excerptRepository, bookRepository, FIXED_CLOCK),
-                new StatisticsService(bookRepository, excerptRepository));
+        BookService bookService = new BookService(bookRepository, FIXED_CLOCK);
+        ExcerptService excerptService = new ExcerptService(excerptRepository, bookRepository, FIXED_CLOCK);
+        // 摘要用假生成器：CLI 测试不关心摘要内容，只关心"调到了、打出来了"
+        SummaryService summaryService = new SummaryService(bookService, excerptService, text -> "测试摘要");
+
+        return new CommandLineApp(io, bookService, excerptService,
+                new StatisticsService(bookRepository, excerptRepository), summaryService);
     }
 
     /**
@@ -373,5 +376,17 @@ class CommandLineAppTest {
         assertTrue(io.output().contains("没有匹配的书籍"));
         // 输出里不应出现任何异常痕迹
         assertFalse(io.output().contains("Exception"));
+    }
+
+    @Test
+    @DisplayName("菜单：AI 摘要打印生成结果")
+    void menu_summary_prints_result() {
+        Book book = prepareBook("活着", 200);
+        prepareExcerpt(book.getId(), "人是为了活着本身而活着", 12);
+        FakeConsoleIO io = new FakeConsoleIO("5", "1", "0");   // 摘要 → 第 1 本 → 退出
+
+        newApp(io).run();
+
+        assertTrue(io.output().contains("测试摘要"));
     }
 }
